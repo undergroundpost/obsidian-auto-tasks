@@ -1,0 +1,7 @@
+requests>=2.25.0
+python-dateutil>=2.8.1
+pyyaml>=5.4.0
+caldav>=0.8.0
+dateparser>=1.0.0
+# Optional: uncomment if using OpenAI
+# openai>=0.27.0
