@@ -463,14 +463,128 @@ def connect_to_caldav(config):
         logger.error(f"Error connecting to CalDAV server: {e}")
         return None, None
 
-def task_exists(todo_list, task_text, existing_tasks=None):
-    """Check if a task already exists in the todo list."""
+def get_filtered_tasks(todo_list, config):
+    """
+    Get tasks filtered according to configuration.
+    
+    If IGNORE_ALL_COMPLETED_TASKS is true, returns only active tasks.
+    Otherwise, returns active tasks + recently completed tasks within threshold.
+    
+    Args:
+        todo_list: The CalDAV calendar/todo list
+        config: Configuration dictionary
+        
+    Returns:
+        List of filtered tasks based on configuration
+    """
+    # Check if we should ignore all completed tasks
+    ignore_all_completed = config.get("IGNORE_ALL_COMPLETED_TASKS", False)
+    
+    if ignore_all_completed:
+        # Only get active tasks
+        active_tasks = todo_list.todos(include_completed=False)
+        logger.info(f"Found {len(active_tasks)} active tasks (ignoring ALL completed tasks)")
+        return active_tasks
+    
+    # Otherwise, get active + recently completed tasks
+    all_tasks = todo_list.todos(include_completed=True)
+    filtered_tasks = []
+    days_threshold = config.get("COMPLETED_TASK_THRESHOLD_DAYS", 7)
+    cutoff_date = datetime.now() - timedelta(days=days_threshold)
+    
+    active_count = 0
+    recent_completed_count = 0
+    older_filtered_count = 0
+    
+    for task in all_tasks:
+        try:
+            # Check if task is completed
+            if "STATUS:COMPLETED" not in task.data:
+                # Keep all active tasks
+                filtered_tasks.append(task)
+                active_count += 1
+                continue
+                
+            # For completed tasks, check completion date
+            completed_match = re.search(r'COMPLETED:([\dT]+Z?)', task.data, re.IGNORECASE)
+            if not completed_match:
+                # If can't determine completion date, be safe and include it
+                filtered_tasks.append(task)
+                continue
+                
+            # Parse completion date
+            completed_str = completed_match.group(1)
+            try:
+                # Handle various date formats
+                if 'T' in completed_str:
+                    if completed_str.endswith('Z'):
+                        completed_date = datetime.strptime(completed_str, '%Y%m%dT%H%M%SZ')
+                    else:
+                        completed_date = datetime.strptime(completed_str, '%Y%m%dT%H%M%S')
+                else:
+                    completed_date = datetime.strptime(completed_str, '%Y%m%d')
+                
+                # Keep only RECENTLY completed tasks (within threshold)
+                if completed_date >= cutoff_date:
+                    filtered_tasks.append(task)
+                    recent_completed_count += 1
+                else:
+                    # Ignore older completed tasks
+                    older_filtered_count += 1
+            except ValueError:
+                # If date parsing fails, include the task to be safe
+                logger.warning(f"Could not parse completion date: {completed_str}")
+                filtered_tasks.append(task)
+                
+        except Exception as e:
+            logger.error(f"Error processing task: {e}")
+            # Include tasks we couldn't process properly
+            filtered_tasks.append(task)
+    
+    logger.info(f"Task filtering: {active_count} active, {recent_completed_count} recently completed, {older_filtered_count} older completed (filtered out)")
+    return filtered_tasks
+
+def task_exists(todo_list, task_text, existing_tasks=None, config=None):
+    """
+    Check if a task already exists in the filtered task list.
+    
+    Args:
+        todo_list: The CalDAV calendar object
+        task_text: The task text or task data dictionary to check
+        existing_tasks: Pre-filtered list of tasks to check against (optional)
+        config: Configuration dictionary (optional)
+        
+    Returns:
+        Boolean indicating if the task exists
+    """
+    # If existing_tasks is not provided, get filtered tasks
     if existing_tasks is None:
         try:
-            existing_tasks = todo_list.todos()
+            # Use default values if config is not provided
+            ignore_all_completed = False
+            days_threshold = 7
+            
+            if config is not None:
+                ignore_all_completed = config.get("IGNORE_ALL_COMPLETED_TASKS", False)
+                days_threshold = config.get("COMPLETED_TASK_THRESHOLD_DAYS", 7)
+            
+            # Get filtered tasks based on configuration
+            if ignore_all_completed:
+                # Only get active tasks
+                existing_tasks = todo_list.todos(include_completed=False)
+                logger.info(f"Found {len(existing_tasks)} active tasks (ignoring ALL completed tasks)")
+            else:
+                # Get active + recently completed tasks
+                existing_tasks = get_filtered_tasks(todo_list, {"COMPLETED_TASK_THRESHOLD_DAYS": days_threshold})
+            
         except Exception as e:
-            logger.error(f"Error getting existing tasks: {e}")
-            return False
+            logger.error(f"Error getting filtered tasks: {e}")
+            # Fall back to getting only active tasks
+            try:
+                existing_tasks = todo_list.todos(include_completed=False)
+            except Exception as e:
+                logger.error(f"Error getting active tasks: {e}")
+                return False
     
     # Normalize the task text
     if isinstance(task_text, dict):
@@ -499,7 +613,7 @@ def task_exists(todo_list, task_text, existing_tasks=None):
     
     return False
 
-def add_task_to_caldav(todo_list, task_data, file_mod_date, existing_tasks=None, check_duplicates=True):
+def add_task_to_caldav(todo_list, task_data, file_mod_date, existing_tasks=None, check_duplicates=True, config=None):
     """Add a task to the CalDAV todo list."""
     task_text = task_data.get('task', '')
     if not task_text.strip():
@@ -509,7 +623,7 @@ def add_task_to_caldav(todo_list, task_data, file_mod_date, existing_tasks=None,
     priority = task_data.get('priority', 'medium')
     
     # Check for duplicate
-    if check_duplicates and task_exists(todo_list, task_text, existing_tasks):
+    if check_duplicates and task_exists(todo_list, task_text, existing_tasks, config):
         logger.info(f"Task already exists, skipping: {task_text}")
         return False
     
@@ -582,8 +696,8 @@ def process_notes(note_files, task_prompt, config):
     existing_tasks = None
     if config.get("CHECK_EXISTING_TASKS", True):
         try:
-            existing_tasks = todo_list.todos()
-            logger.info(f"Found {len(existing_tasks)} existing tasks in the todo list")
+            # Get filtered tasks based on configuration
+            existing_tasks = get_filtered_tasks(todo_list, config)
         except Exception as e:
             logger.error(f"Error getting existing tasks: {e}")
             config["CHECK_EXISTING_TASKS"] = False
@@ -639,7 +753,8 @@ def process_notes(note_files, task_prompt, config):
                     logger.warning(f"Invalid task format: {task_data}")
                     continue
                     
-                if add_task_to_caldav(todo_list, task_data, file_mod_date, existing_tasks, config.get("CHECK_EXISTING_TASKS", True)):
+                # Pass config to add_task_to_caldav
+                if add_task_to_caldav(todo_list, task_data, file_mod_date, existing_tasks, config.get("CHECK_EXISTING_TASKS", True), config):
                     tasks_added += 1
                     task_info = {
                         'text': task_data.get('task', ''),
