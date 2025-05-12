@@ -2,42 +2,43 @@
 # Place this file in the same directory as the script
 
 # Folder settings
-INPUT_FOLDER: "~/Documents/Notes"      # Main notes folder
+INPUT_FOLDER: "/Users/jarren/Nextcloud/Notes"      # Main notes folder
 
 # Folders to exclude (list format - add as many as needed)
 EXCLUDE_FOLDERS:
-  - "~/Documents/Notes/AI"
-  - "~/Documents/Notes/Archives"
+  - "/Users/jarren/Nextcloud/Notes/AI"
+  - "/Users/jarren/Nextcloud/Notes/Extras"
 
 # LLM Provider settings
-LLM_PROVIDER: "ollama"                 # Options: "ollama" or "openai"
+LLM_PROVIDER: "ollama"                             # Options: "ollama" or "openai"
 
 # Ollama settings
-OLLAMA_MODEL: "gemma:7b"               # Model to use
-OLLAMA_SERVER_ADDRESS: "http://localhost:11434"  # Ollama server address
-OLLAMA_CONTEXT_WINDOW: 32000           # Context window size
+OLLAMA_MODEL: "gemma3:12b"                         # Model to use
+OLLAMA_SERVER_ADDRESS: "http://192.168.7.108:11434"  # Ollama server address
+OLLAMA_CONTEXT_WINDOW: 32000                        # Context window size
 
 # OpenAI settings (used when LLM_PROVIDER is "openai")
-OPENAI_API_KEY: ""                     # Your OpenAI API key (required for OpenAI)
-OPENAI_MODEL: "gpt-3.5-turbo"          # OpenAI model to use
-OPENAI_MAX_TOKENS: 4000                # Maximum tokens for responses
+OPENAI_API_KEY: ""                                 # Your OpenAI API key (required for OpenAI)
+OPENAI_MODEL: "gpt-3.5-turbo"                      # OpenAI model to use
+OPENAI_MAX_TOKENS: 4000                            # Maximum tokens for responses
 
 # CalDAV server settings
 # You can use either the generic CalDAV settings OR the Nextcloud-specific settings
 
 # Generic CalDAV settings (for any CalDAV server)
-CALDAV_URL: ""                         # Your CalDAV server URL
-CALDAV_USERNAME: ""                    # Your CalDAV username
-CALDAV_PASSWORD: ""                    # Your CalDAV password
+CALDAV_URL: ""                                     # Your CalDAV server URL
+CALDAV_USERNAME: ""                                # Your CalDAV username
+CALDAV_PASSWORD: ""                                # Your CalDAV password
 
 # Nextcloud-specific settings (leave empty if using generic CalDAV)
-NEXTCLOUD_TODO_URL: ""                 # Example: https://nextcloud.example.com/remote.php/dav/calendars/username/tasks
-NEXTCLOUD_USERNAME: ""                 # Your Nextcloud username
-NEXTCLOUD_PASSWORD: ""                 # Your Nextcloud password
+NEXTCLOUD_TODO_URL: "https://next.nesbitt.cloud/remote.php/dav/calendars/jarren/tasks"
+NEXTCLOUD_USERNAME: "jarren"
+NEXTCLOUD_PASSWORD: "W2RgX-gYwd8-6LMHN-gFxy8-LGbgN"
 
 # Common CalDAV settings
-CALDAV_TODO_LIST: "tasks"              # Name of your todo list/calendar
+CALDAV_TODO_LIST: "Personal"                          # Name of your todo list/calendar
 
 # Task settings
-CHECK_EXISTING_TASKS: true             # Check for duplicate tasks before adding
-DELAY: 0                               # Delay between processing files (seconds) - useful with OpenAI API
+CHECK_EXISTING_TASKS: true                         # Check for duplicate tasks before adding
+IGNORE_ALL_COMPLETED_TASKS: false                  # If true, never check completed tasks, regardless of completion date 
+COMPLETED_TASK_THRESHOLD_DAYS: 7                   # Only applies if IGNORE_ALL_COMPLETED_TASKS is false
